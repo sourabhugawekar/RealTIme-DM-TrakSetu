@@ -25,6 +25,24 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Client-side validation
+    if (!email.trim()) {
+      setError('Email is required');
+      return;
+    }
+
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (!password) {
+      setError('Password is required');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -39,14 +57,21 @@ export default function LoginPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        // Provide user-friendly error messages
+        if (response.status === 401) {
+          throw new Error('Invalid email or password. Please try again.');
+        } else if (response.status === 404) {
+          throw new Error('Account not found. Please register first.');
+        } else {
+          throw new Error(data.error || 'Login failed. Please try again.');
+        }
       }
 
       // Redirect to dashboard
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {
-      setError(err.message || 'An error occurred during login');
+      setError(err.message || 'An error occurred during login. Please try again.');
     } finally {
       setLoading(false);
     }

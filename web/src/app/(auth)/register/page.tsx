@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Shield, Sparkles, User, Mail, Lock, Building, MapPin, Phone, UserCircle, ArrowLeft } from 'lucide-react';
+import { Shield, Sparkles, User, Mail, Lock, Building, MapPin, Phone, UserCircle, ArrowLeft, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -36,6 +36,59 @@ export default function RegisterPage() {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showRoleInfo, setShowRoleInfo] = useState(false);
+
+  // Password strength calculation
+  const getPasswordStrength = (password: string): { strength: number; label: string; color: string } => {
+    if (!password) return { strength: 0, label: '', color: '' };
+    
+    let strength = 0;
+    if (password.length >= 6) strength += 1;
+    if (password.length >= 8) strength += 1;
+    if (/[a-z]/.test(password) && /[A-Z]/.test(password)) strength += 1;
+    if (/\d/.test(password)) strength += 1;
+    if (/[^a-zA-Z\d]/.test(password)) strength += 1;
+
+    if (strength <= 1) return { strength, label: 'Weak', color: 'bg-red-500' };
+    if (strength <= 3) return { strength, label: 'Medium', color: 'bg-yellow-500' };
+    return { strength, label: 'Strong', color: 'bg-green-500' };
+  };
+
+  const passwordStrength = getPasswordStrength(formData.password);
+
+  // Role descriptions for user guidance
+  const roleDescriptions: Record<string, { title: string; description: string; access: string }> = {
+    ADMIN: {
+      title: 'Admin (NDMA)',
+      description: 'National Disaster Management Authority officials',
+      access: 'Full system access, user management, national reports',
+    },
+    SDMA: {
+      title: 'SDMA Representative',
+      description: 'State Disaster Management Authority',
+      access: 'State-level data management and reporting',
+    },
+    ATI: {
+      title: 'ATI Representative',
+      description: 'Administrative Training Institute',
+      access: 'Regional training management and reports',
+    },
+    NGO: {
+      title: 'NGO/Training Partner',
+      description: 'Non-Governmental Organizations and Training Institutions',
+      access: 'Organization-specific training data management',
+    },
+    TRAINER: {
+      title: 'Trainer',
+      description: 'Individual trainers conducting programs',
+      access: 'Create and manage own training records',
+    },
+    VOLUNTEER: {
+      title: 'Volunteer/Viewer',
+      description: 'General volunteers or public viewers',
+      access: 'Read-only access to public data and reports',
+    },
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -48,19 +101,61 @@ export default function RegisterPage() {
     e.preventDefault();
     setError('');
 
-    // Validation
+    // Enhanced Validation
+    if (!formData.name.trim()) {
+      setError('Full name is required');
+      return;
+    }
+
+    if (formData.name.length < 2) {
+      setError('Name must be at least 2 characters');
+      return;
+    }
+
+    if (!formData.email.trim()) {
+      setError('Email is required');
+      return;
+    }
+
+    const emailRegex = /^\S+@\S+\.\S+$/;
+    if (!emailRegex.test(formData.email)) {
+      setError('Please enter a valid email address');
+      return;
+    }
+
+    if (!formData.password) {
+      setError('Password is required');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters long');
+      return;
+    }
+
+    if (!formData.confirmPassword) {
+      setError('Please confirm your password');
+      return;
+    }
+
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match');
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    if (!formData.role) {
+      setError('Please select your role to continue');
       return;
     }
 
-    if (!formData.role) {
-      setError('Please select a role');
+    // Role-specific validation
+    if (['SDMA', 'ATI'].includes(formData.role) && !formData.region?.trim()) {
+      setError('Region/State is required for SDMA and ATI roles');
+      return;
+    }
+
+    if (['NGO', 'TRAINER'].includes(formData.role) && !formData.organization?.trim()) {
+      setError('Organization is required for NGO and Trainer roles');
       return;
     }
 
@@ -227,6 +322,28 @@ export default function RegisterPage() {
                       className="pl-12 pr-4 bg-white/95 border-2 border-white/60 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-300/50 transition-all backdrop-blur-sm h-12 shadow-xl rounded-lg font-medium"
                     />
                   </div>
+                  {/* Password Strength Indicator */}
+                  {formData.password && (
+                    <div className="space-y-1">
+                      <div className="flex gap-1">
+                        {[...Array(5)].map((_, i) => (
+                          <div
+                            key={i}
+                            className={`h-1 flex-1 rounded-full transition-colors ${
+                              i < passwordStrength.strength ? passwordStrength.color : 'bg-gray-600'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <p className={`text-xs ml-1 ${
+                        passwordStrength.label === 'Strong' ? 'text-green-300' :
+                        passwordStrength.label === 'Medium' ? 'text-yellow-300' :
+                        'text-red-300'
+                      }`}>
+                        Password strength: {passwordStrength.label}
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2 group">
@@ -247,8 +364,18 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <div className="space-y-2 group">
-                  <Label htmlFor="role" className="text-white font-semibold text-base drop-shadow-lg">Role *</Label>
+                <div className="space-y-2 group md:col-span-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="role" className="text-white font-semibold text-base drop-shadow-lg">Role *</Label>
+                    <button
+                      type="button"
+                      onClick={() => setShowRoleInfo(!showRoleInfo)}
+                      className="text-blue-300 hover:text-white transition-colors flex items-center gap-1 text-sm"
+                    >
+                      <Info className="h-4 w-4" />
+                      {showRoleInfo ? 'Hide' : 'Show'} Role Info
+                    </button>
+                  </div>
                   <div className="relative">
                     <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/70 group-focus-within:text-white transition-colors z-10" />
                     <Select
@@ -259,50 +386,108 @@ export default function RegisterPage() {
                       <SelectTrigger className="pl-12 pr-4 bg-white/95 border-2 border-white/60 text-gray-900 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-300/50 transition-all backdrop-blur-sm h-12 shadow-xl rounded-lg font-medium">
                         <SelectValue placeholder="Select your role" />
                       </SelectTrigger>
-                      <SelectContent className="bg-white/95 backdrop-blur-md border-2 border-white/60">
-                        <SelectItem value="ADMIN">Admin (NDMA)</SelectItem>
-                        <SelectItem value="SDMA">SDMA Representative</SelectItem>
-                        <SelectItem value="ATI">ATI Representative</SelectItem>
-                        <SelectItem value="NGO">NGO Representative</SelectItem>
-                        <SelectItem value="TRAINER">Trainer</SelectItem>
-                        <SelectItem value="VOLUNTEER">Volunteer</SelectItem>
+                      <SelectContent className="bg-white/95 backdrop-blur-md border-2 border-white/60 max-h-80">
+                        <SelectItem value="ADMIN">
+                          <div className="py-1">
+                            <div className="font-semibold">Admin (NDMA)</div>
+                            <div className="text-xs text-gray-600">Full system access & user management</div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="SDMA">
+                          <div className="py-1">
+                            <div className="font-semibold">SDMA Representative</div>
+                            <div className="text-xs text-gray-600">State-level data management</div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="ATI">
+                          <div className="py-1">
+                            <div className="font-semibold">ATI Representative</div>
+                            <div className="text-xs text-gray-600">Regional training management</div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="NGO">
+                          <div className="py-1">
+                            <div className="font-semibold">NGO/Training Partner</div>
+                            <div className="text-xs text-gray-600">Organization-specific data</div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="TRAINER">
+                          <div className="py-1">
+                            <div className="font-semibold">Trainer</div>
+                            <div className="text-xs text-gray-600">Manage own training records</div>
+                          </div>
+                        </SelectItem>
+                        <SelectItem value="VOLUNTEER">
+                          <div className="py-1">
+                            <div className="font-semibold">Volunteer/Viewer</div>
+                            <div className="text-xs text-gray-600">Read-only access to public data</div>
+                          </div>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {/* Role Information Card */}
+                  {showRoleInfo && formData.role && roleDescriptions[formData.role] && (
+                    <div className="mt-3 p-4 bg-blue-500/20 border border-blue-400/30 rounded-lg backdrop-blur-sm animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="flex items-start gap-3">
+                        <Info className="h-5 w-5 text-blue-300 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <h4 className="text-white font-semibold mb-1">{roleDescriptions[formData.role].title}</h4>
+                          <p className="text-blue-100 text-sm mb-2">{roleDescriptions[formData.role].description}</p>
+                          <p className="text-blue-200 text-xs">
+                            <span className="font-medium">Access Level:</span> {roleDescriptions[formData.role].access}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="space-y-2 group">
-                  <Label htmlFor="organization" className="text-white font-semibold text-base drop-shadow-lg">Organization</Label>
+                  <Label htmlFor="organization" className="text-white font-semibold text-base drop-shadow-lg">
+                    Organization {['NGO', 'TRAINER'].includes(formData.role) && <span className="text-red-400">*</span>}
+                  </Label>
                   <div className="relative">
                     <Building className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/70 group-focus-within:text-white transition-colors z-10" />
                     <Input
                       id="organization"
                       name="organization"
                       type="text"
-                      placeholder="Your organization"
+                      placeholder={['NGO', 'TRAINER'].includes(formData.role) ? 'Your organization (required)' : 'Your organization'}
                       value={formData.organization}
                       onChange={handleChange}
                       disabled={loading}
+                      required={['NGO', 'TRAINER'].includes(formData.role)}
                       className="pl-12 pr-4 bg-white/95 border-2 border-white/60 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-300/50 transition-all backdrop-blur-sm h-12 shadow-xl rounded-lg font-medium"
                     />
                   </div>
+                  {['NGO', 'TRAINER'].includes(formData.role) && (
+                    <p className="text-xs text-blue-200 ml-1">Required for your selected role</p>
+                  )}
                 </div>
 
                 <div className="space-y-2 group">
-                  <Label htmlFor="region" className="text-white font-semibold text-base drop-shadow-lg">Region/State</Label>
+                  <Label htmlFor="region" className="text-white font-semibold text-base drop-shadow-lg">
+                    Region/State {['SDMA', 'ATI'].includes(formData.role) && <span className="text-red-400">*</span>}
+                  </Label>
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/70 group-focus-within:text-white transition-colors z-10" />
                     <Input
                       id="region"
                       name="region"
                       type="text"
-                      placeholder="e.g., Maharashtra"
+                      placeholder={['SDMA', 'ATI'].includes(formData.role) ? 'e.g., Maharashtra (required)' : 'e.g., Maharashtra'}
                       value={formData.region}
                       onChange={handleChange}
                       disabled={loading}
+                      required={['SDMA', 'ATI'].includes(formData.role)}
                       className="pl-12 pr-4 bg-white/95 border-2 border-white/60 text-gray-900 placeholder:text-gray-500 focus:bg-white focus:border-blue-400 focus:ring-2 focus:ring-blue-300/50 transition-all backdrop-blur-sm h-12 shadow-xl rounded-lg font-medium"
                     />
                   </div>
+                  {['SDMA', 'ATI'].includes(formData.role) && (
+                    <p className="text-xs text-blue-200 ml-1">Required for your selected role</p>
+                  )}
                 </div>
 
                 <div className="space-y-2 group">
